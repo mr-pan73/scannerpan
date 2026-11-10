@@ -23,10 +23,11 @@ logger = logging.getLogger("scannerpan.app")
 
 
 def setup_environment():
-    """Configures high-DPI and platform attributes for Linux / KDE Plasma."""
-    # Ensure correct desktop file name for Wayland / X11 taskbars
-    os.environ.setdefault("QT_QPA_PLATFORMTHEME", "kde")
-    os.environ.setdefault("PULSE_PROP_application.name", "ScannerPan")
+    """Configures high-DPI and platform attributes for Linux / KDE Plasma / Windows."""
+    if sys.platform != "win32":
+        # Ensure correct desktop file name for Wayland / X11 taskbars
+        os.environ.setdefault("QT_QPA_PLATFORMTHEME", "kde")
+        os.environ.setdefault("PULSE_PROP_application.name", "ScannerPan")
 
 
 def parse_args():
@@ -61,6 +62,11 @@ def main():
 
     # App Icon
     icon = get_kde_icon("scanner")
+    if icon.isNull():
+        base_dir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        ico_path = os.path.join(base_dir, "resources", "scannerpan.ico")
+        if os.path.isfile(ico_path):
+            icon = QIcon(ico_path)
     if not icon.isNull():
         app.setWindowIcon(icon)
 

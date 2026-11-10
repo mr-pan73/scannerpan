@@ -1,10 +1,27 @@
 # 🖨️ ScannerPan
 
-**ScannerPan** è un'applicazione moderna e completa per la gestione di scanner, scansioni avanzate e OCR, progettata per Linux con piena integrazione visiva e tematica per l'ambiente desktop **KDE Plasma (Breeze)**.
+**ScannerPan** è un'applicazione moderna e completa per la gestione di scanner, scansioni avanzate e OCR, progettata per Linux (ambiente desktop **KDE Plasma**) e nativamente compatibile con **Windows 11 / Windows 10 (64-bit)**.
 
 ---
 
-## 📥 Download Diretto Pacchetto Debian (.deb)
+## 🪟 Download per Windows 11 / Windows 10 (64-bit)
+
+È disponibile l'eseguibile standalone nativo precompilato (senza necessità di installare Python o dipendenze esterne):
+
+* 🚀 **Download Diretto Eseguibile (.exe):**
+  [ScannerPan.exe](https://gitlab.com/api/v4/projects/88754086/packages/generic/scannerpan/1.0.0/ScannerPan.exe) *(124 MB)*
+* 📦 **Download Archivio (.zip):**
+  [ScannerPan_v1.0.0_Windows_x64.zip](https://gitlab.com/api/v4/projects/88754086/packages/generic/scannerpan/1.0.0/ScannerPan_v1.0.0_Windows_x64.zip)
+
+### Caratteristiche su Windows 11:
+- **Eseguibile Standalone unico:** basta scaricarlo e fare doppio clic.
+- **Rilevamento automatico Tema di Windows 11:** si adatta istantaneamente a Modalità Scura o Chiara di sistema.
+- **Supporto OCR Tesseract:** rileva automaticamente `tesseract.exe` nelle cartelle standard (es. `C:\Program Files\Tesseract-OCR`).
+- **Icona applicazione ad alta risoluzione:** integrata nel file `.exe` (fino a 256x256 con supporto HiDPI).
+
+---
+
+## 📥 Download Pacchetto Debian / Ubuntu (.deb)
 
 Puoi scaricare il pacchetto precompilato direttamente con `wget` o `curl` tramite il Package Registry ufficiale di GitLab (privo di rate limit):
 
@@ -61,14 +78,22 @@ scannerpan
 
 ---
 
-## 🛠️ Compilazione del Pacchetto .deb dai Sorgenti
+## 🛠️ Compilazione dai Sorgenti
 
-Se desideri compilare il pacchetto `.deb` autonomamente:
-
+### Su Linux (Pacchetto .deb)
 ```bash
 git clone https://gitlab.com/mrpan-group/scannerpan.git
 cd scannerpan
 ./build_deb.sh
 ```
 
-Il pacchetto generato sarà disponibile in `uploads/scannerpan_1.0.0_amd64.deb` e nella directory principale.
+### Su Windows (Eseguibile .exe)
+Esegui lo script batch incluso con un doppio clic o da terminale Windows:
+```cmd
+build_exe.bat
+```
+oppure manualmente tramite PyInstaller:
+```cmd
+python -m PyInstaller --clean scannerpan.spec
+```
+L'eseguibile `.exe` verrà generato nella cartella `dist\ScannerPan.exe`.

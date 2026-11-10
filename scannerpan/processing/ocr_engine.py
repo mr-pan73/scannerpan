@@ -88,7 +88,21 @@ class OCREngine:
     DEFAULT_LANGUAGES = "ita+eng"
 
     def __init__(self, tesseract_path: Optional[str] = None):
-        self.tesseract_bin = tesseract_path or shutil.which("tesseract") or "/usr/bin/tesseract"
+        if tesseract_path:
+            self.tesseract_bin = tesseract_path
+        else:
+            found = shutil.which("tesseract")
+            if not found and os.name == "nt":
+                candidates = [
+                    os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Tesseract-OCR", "tesseract.exe"),
+                    os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Tesseract-OCR", "tesseract.exe"),
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+                ]
+                for c in candidates:
+                    if os.path.isfile(c):
+                        found = c
+                        break
+            self.tesseract_bin = found or (r"C:\Program Files\Tesseract-OCR\tesseract.exe" if os.name == "nt" else "/usr/bin/tesseract")
         self._available_langs = self._query_available_languages()
 
     def is_available(self) -> bool:

@@ -4,4 +4,8 @@ __pycache__/
 .pytest_cache/
 *.log
 build_pkg/
+build/
+dist/
+*.spec.bak
+resources/windows_dlls/
 

@@ -13,9 +13,22 @@ from PyQt6.QtCore import Qt
 
 def is_system_dark_mode() -> bool:
     """
-    Detects if the desktop environment (KDE Plasma, GNOME, or FreeDesktop)
+    Detects if the desktop environment (KDE Plasma, GNOME, or Windows 11)
     is currently using a dark theme.
     """
+    # 0. Windows 11 / Windows 10 Registry Detection
+    if sys.platform == "win32":
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
+            )
+            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
+            return value == 0
+        except Exception:
+            pass
+
     # 1. Try KDE kreadconfig6 / kreadconfig5
     for cmd in ["kreadconfig6", "kreadconfig5"]:
         try:
@@ -376,6 +389,34 @@ def get_kde_icon(name: str, fallback_standard=None) -> QIcon:
         app = QApplication.instance()
         if app:
             return app.style().standardIcon(fallback_standard)
+
+    # Standard QStyle fallback mapping for Windows / non-KDE environments
+    app = QApplication.instance()
+    if app:
+        from PyQt6.QtWidgets import QStyle
+        sp = QStyle.StandardPixmap
+        style_map = {
+            "view-refresh": sp.SP_BrowserReload,
+            "view-preview": sp.SP_FileDialogContentsView,
+            "document-scan": sp.SP_FileDialogContentsView,
+            "scanner": sp.SP_DriveCDIcon,
+            "document-save": sp.SP_DialogSaveButton,
+            "edit-copy": sp.SP_FileIcon,
+            "media-playlist-repeat": sp.SP_BrowserReload,
+            "edit-cut": sp.SP_ToolBarHorizontalExtensionButton,
+            "transform-rotate": sp.SP_BrowserReload,
+            "view-filter": sp.SP_FileDialogDetailedView,
+            "edit-undo": sp.SP_ArrowBack,
+            "edit-redo": sp.SP_ArrowForward,
+            "object-rotate-left": sp.SP_ArrowLeft,
+            "object-rotate-right": sp.SP_ArrowRight,
+            "edit-delete": sp.SP_TrashIcon,
+            "zoom-in": sp.SP_ArrowUp,
+            "zoom-out": sp.SP_ArrowDown,
+            "zoom-fit-best": sp.SP_TitleBarMaxButton,
+        }
+        if name in style_map:
+            return app.style().standardIcon(style_map[name])
 
     return QIcon()
 

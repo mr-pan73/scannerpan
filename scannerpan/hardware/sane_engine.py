@@ -114,11 +114,12 @@ class SaneEngine:
         self.allow_mock_fallback = allow_mock_fallback
         self._cached_devices: List[ScannerDevice] = []
         self._options_cache: Dict[str, Dict[str, Any]] = {}
-        self.scanimage_bin = shutil.which("scanimage") or "/usr/bin/scanimage"
+        found_scanimage = shutil.which("scanimage")
+        self.scanimage_bin = found_scanimage or ("scanimage.exe" if os.name == "nt" else "/usr/bin/scanimage")
 
     def is_sane_installed(self) -> bool:
         """Verifica se l'utility scanimage è installata ed eseguibile."""
-        return os.path.isfile(self.scanimage_bin) and os.access(self.scanimage_bin, os.X_OK)
+        return bool(self.scanimage_bin and os.path.isfile(self.scanimage_bin) and os.access(self.scanimage_bin, os.X_OK))
 
     def list_devices(
         self,
