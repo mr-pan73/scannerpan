@@ -55,6 +55,36 @@ class DocumentFormat(str, Enum):
     TXT = "txt"
 
 
+def find_tesseract_binary() -> Optional[str]:
+    """Cerca l'eseguibile tesseract nel PATH e nelle posizioni canoniche di sistema (Linux e Windows)."""
+    # 1. Prova nel PATH
+    for name in ["tesseract", "tesseract.exe"]:
+        found = shutil.which(name)
+        if found and os.path.isfile(found) and (os.name == "nt" or os.access(found, os.X_OK)):
+            return found
+
+    # 2. Candidati standard su Windows
+    if os.name == "nt":
+        candidates = [
+            os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Tesseract-OCR", "tesseract.exe"),
+            os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Tesseract-OCR", "tesseract.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
+            os.path.join(os.environ.get("APPDATA", ""), "Tesseract-OCR", "tesseract.exe"),
+            r"C:\Tesseract-OCR\tesseract.exe",
+        ]
+        for c in candidates:
+            if os.path.isfile(c):
+                return c
+
+    # 3. Candidati standard su Linux / Unix
+    if os.name != "nt":
+        for c in ["/usr/bin/tesseract", "/usr/local/bin/tesseract", "/bin/tesseract"]:
+            if os.path.isfile(c) and os.access(c, os.X_OK):
+                return c
+
+    return None
+
+
 @dataclass
 class OCRWord:
     """Informazioni su una singola parola identificata tramite OCR."""
@@ -91,18 +121,7 @@ class OCREngine:
         if tesseract_path:
             self.tesseract_bin = tesseract_path
         else:
-            found = shutil.which("tesseract")
-            if not found and os.name == "nt":
-                candidates = [
-                    os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Tesseract-OCR", "tesseract.exe"),
-                    os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Tesseract-OCR", "tesseract.exe"),
-                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Tesseract-OCR", "tesseract.exe"),
-                ]
-                for c in candidates:
-                    if os.path.isfile(c):
-                        found = c
-                        break
-            self.tesseract_bin = found or (r"C:\Program Files\Tesseract-OCR\tesseract.exe" if os.name == "nt" else "/usr/bin/tesseract")
+            self.tesseract_bin = find_tesseract_binary() or (r"C:\Program Files\Tesseract-OCR\tesseract.exe" if os.name == "nt" else "/usr/bin/tesseract")
         self._available_langs = self._query_available_languages()
 
     def is_available(self) -> bool:

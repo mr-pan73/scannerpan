@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import List, Optional, Union
 from PIL import Image
 
+from scannerpan.processing.ocr_engine import find_tesseract_binary
+
 logger = logging.getLogger("scannerpan.processing.ocr_exporter")
 
 
@@ -27,9 +29,9 @@ def run_tesseract_ocr(
     Executes tesseract CLI directly on a PIL image.
     output_type: 'txt' or 'pdf'
     """
-    tesseract_bin = shutil.which("tesseract") or "/usr/bin/tesseract"
-    if not os.path.exists(tesseract_bin):
-        logger.warning("Tesseract binary not found at %s", tesseract_bin)
+    tesseract_bin = find_tesseract_binary()
+    if not tesseract_bin:
+        logger.warning("Tesseract binary non trovato sul sistema")
         return "" if output_type == "txt" else b""
 
     with tempfile.TemporaryDirectory(prefix="scannerpan_ocr_") as tmp_dir:
@@ -81,7 +83,7 @@ def export_scanned_document(
         # 1. SEARCHABLE PDF
         if fmt == "pdf":
             # If tesseract is available, generate searchable PDF per page and merge with pdfunite/img2pdf
-            tesseract_bin = shutil.which("tesseract")
+            tesseract_bin = find_tesseract_binary()
             pdfunite_bin = shutil.which("pdfunite")
 
             if tesseract_bin and pdfunite_bin and len(images) > 1:

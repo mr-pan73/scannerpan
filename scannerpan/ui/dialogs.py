@@ -21,6 +21,7 @@ from PyQt6.QtCore import Qt, pyqtSignal
 
 from scannerpan.ui.kde_theme import get_kde_icon
 from scannerpan.ui.canvas import pil_to_qpixmap
+from scannerpan.processing.ocr_engine import find_tesseract_binary
 
 
 # ==============================================================================
@@ -522,7 +523,23 @@ class ExportOCRDialog(QDialog):
         self.ocr_group = QGroupBox("Parametri di Riconoscimento Testo (Tesseract OCR)", self)
         og_layout = QGridLayout(self.ocr_group)
 
-        og_layout.addWidget(QLabel("Lingua OCR:"), 0, 0)
+        # Rilevamento stato Tesseract
+        tess_bin = find_tesseract_binary()
+        self.lbl_tess_status = QLabel(self.ocr_group)
+        self.lbl_tess_status.setWordWrap(True)
+        if tess_bin:
+            self.lbl_tess_status.setText(f"✓ Motore Tesseract attivo: {os.path.basename(tess_bin)}")
+            self.lbl_tess_status.setStyleSheet("color: #27ae60; font-weight: bold; font-size: 8.5pt;")
+        else:
+            self.lbl_tess_status.setText(
+                "⚠️ Tesseract OCR non rilevato sul sistema.\n"
+                "I PDF verranno salvati come immagini ad alta risoluzione. "
+                "Per abilitare la ricerca testo o l'esportazione Word/ODT, installa Tesseract OCR."
+            )
+            self.lbl_tess_status.setStyleSheet("color: #e67e22; font-size: 8.5pt;")
+        og_layout.addWidget(self.lbl_tess_status, 0, 0, 1, 2)
+
+        og_layout.addWidget(QLabel("Lingua OCR:"), 1, 0)
         self.lang_combo = QComboBox(self.ocr_group)
         self.lang_combo.addItem("Italiano (ita)", "ita")
         self.lang_combo.addItem("Inglese (eng)", "eng")
@@ -530,15 +547,15 @@ class ExportOCRDialog(QDialog):
         self.lang_combo.addItem("Francese (fra)", "fra")
         self.lang_combo.addItem("Tedesco (deu)", "deu")
         self.lang_combo.addItem("Spagnolo (spa)", "spa")
-        og_layout.addWidget(self.lang_combo, 0, 1)
+        og_layout.addWidget(self.lang_combo, 1, 1)
 
         self.chk_enhance = QCheckBox("Migliora nitidezza e raddrizza testo (Deskew automatico)", self.ocr_group)
         self.chk_enhance.setChecked(True)
-        og_layout.addWidget(self.chk_enhance, 1, 0, 1, 2)
+        og_layout.addWidget(self.chk_enhance, 2, 0, 1, 2)
 
         self.chk_remove_shadows = QCheckBox("Rimuovi ombre e macchie di scansione", self.ocr_group)
         self.chk_remove_shadows.setChecked(True)
-        og_layout.addWidget(self.chk_remove_shadows, 2, 0, 1, 2)
+        og_layout.addWidget(self.chk_remove_shadows, 3, 0, 1, 2)
 
         layout.addWidget(self.ocr_group)
 
@@ -547,7 +564,11 @@ class ExportOCRDialog(QDialog):
         dg_layout = QGridLayout(dest_group)
 
         dg_layout.addWidget(QLabel("Salva in:"), 0, 0)
-        default_path = os.path.expanduser(f"~/Documenti/{self.default_filename}.pdf")
+        home = os.path.expanduser("~")
+        docs_dir = os.path.join(home, "Documenti") if os.path.isdir(os.path.join(home, "Documenti")) else os.path.join(home, "Documents")
+        if not os.path.isdir(docs_dir):
+            docs_dir = home
+        default_path = os.path.join(docs_dir, f"{self.default_filename}.pdf")
         self.dest_edit = QLineEdit(default_path, dest_group)
         dg_layout.addWidget(self.dest_edit, 0, 1)
 
