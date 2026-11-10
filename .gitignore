@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-*.deb
 .pytest_cache/
 *.log
+build_pkg/
+

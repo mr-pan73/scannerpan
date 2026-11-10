@@ -84,6 +84,10 @@ EOF
 echo "🔨 Compilazione pacchetto con dpkg-deb..."
 dpkg-deb --build --root-owner-group "${BUILD_ROOT}" "${SCRIPT_DIR}/${DEB_FILENAME}"
 
+# 8b. Copia pacchetto in uploads/ per download immediato da repository
+mkdir -p "${SCRIPT_DIR}/uploads"
+cp "${SCRIPT_DIR}/${DEB_FILENAME}" "${SCRIPT_DIR}/uploads/${DEB_FILENAME}"
+
 # 9. Pulizia build temporanea
 rm -rf "${BUILD_ROOT}"
 
