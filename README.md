@@ -6,23 +6,27 @@
 
 ## 📥 Download Diretto Pacchetto Debian (.deb)
 
-Puoi scaricare il pacchetto precompilato direttamente da questo repository:
+Puoi scaricare il pacchetto precompilato direttamente con `wget` o `curl` tramite il Package Registry ufficiale di GitLab (privo di rate limit):
 
-* ⬇️ **Download Diretto:** [uploads/scannerpan_1.0.0_amd64.deb](uploads/scannerpan_1.0.0_amd64.deb)
-* 🔗 **Link Raw Diretto:** [https://gitlab.com/mrpan-group/scannerpan/-/raw/master/uploads/scannerpan_1.0.0_amd64.deb?inline=false](https://gitlab.com/mrpan-group/scannerpan/-/raw/master/uploads/scannerpan_1.0.0_amd64.deb?inline=false)
-* 📦 **Release GitLab:** [https://gitlab.com/mrpan-group/scannerpan/-/releases/v1.0.0](https://gitlab.com/mrpan-group/scannerpan/-/releases/v1.0.0)
+```bash
+# Download con wget
+wget "https://gitlab.com/api/v4/projects/88754086/packages/generic/scannerpan/1.0.0/scannerpan_1.0.0_amd64.deb" -O scannerpan_1.0.0_amd64.deb
+
+# Oppure con curl
+curl -L "https://gitlab.com/api/v4/projects/88754086/packages/generic/scannerpan/1.0.0/scannerpan_1.0.0_amd64.deb" -o scannerpan_1.0.0_amd64.deb
+```
+
+* 📦 **Release Ufficiale GitLab:** [https://gitlab.com/mrpan-group/scannerpan/-/releases/v1.0.0](https://gitlab.com/mrpan-group/scannerpan/-/releases/v1.0.0)
+* 📂 **File nel repository:** [uploads/scannerpan_1.0.0_amd64.deb](uploads/scannerpan_1.0.0_amd64.deb)
 
 ---
 
 ## 🚀 Installazione su Ubuntu / Debian
 
-Scarica il pacchetto `.deb` ed esegui nel terminale:
+Dopo aver scaricato il file `.deb`, installalo con:
 
 ```bash
-# Installazione pacchetto
-sudo dpkg -i uploads/scannerpan_1.0.0_amd64.deb
-
-# Risoluzione automatica dipendenze di sistema (se necessario)
+sudo dpkg -i scannerpan_1.0.0_amd64.deb
 sudo apt-get update && sudo apt-get install -f -y
 ```
 
