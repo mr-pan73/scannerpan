@@ -49,8 +49,16 @@ def pil_to_cv(image: Image.Image) -> np.ndarray:
     return cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
 
 
-def cv_to_pil(image: np.ndarray) -> Image.Image:
-    """Converte un array NumPy OpenCV in immagine PIL (RGB)."""
+def cv_to_pil(image: Union[np.ndarray, Tuple[Any, ...], List[Any], Image.Image]) -> Image.Image:
+    """Converte un array NumPy OpenCV in immagine PIL (RGB).
+    Gestisce in sicurezza anche tuple, liste o oggetti PIL pre-esistenti.
+    """
+    if isinstance(image, (tuple, list)):
+        image = image[0]
+    if isinstance(image, Image.Image):
+        return image
+    if not isinstance(image, np.ndarray):
+        raise TypeError(f"Tipo immagine non supportato: {type(image)}")
     if len(image.shape) == 2:
         return Image.fromarray(image)
     # Se ha 3 canali, assume BGR da OpenCV e converte in RGB
@@ -168,7 +176,7 @@ class CVDetector:
         """Raddrizza ed estrae automaticamente il documento dal piano di scansione.
 
         Se viene rilevato un contorno a 4 punti, applica four_point_transform.
-        Altrimenti, esegue il deskew basato sull'orientamento del testo/bordi (minAreaRect).
+        Altrimenti, esegue il deskew basato sull'orientamento del testo/bordi.
         Restituisce (immagine_elaborata, is_perspective_transformed).
         """
         img = load_image(image_input)
@@ -181,34 +189,75 @@ class CVDetector:
         deskewed, _ = self.deskew_by_angle(img)
         return deskewed, False
 
+    def deskew_document(
+        self,
+        image_input: Union[str, Path, Image.Image, np.ndarray],
+    ) -> Tuple[np.ndarray, float]:
+        """Raddrizza l'inclinazione dell'immagine e restituisce (immagine_raddrizzata, angolo_in_gradi).
+
+        Controlla prioritariamente l'angolo dei blocchi di testo o dei margini del foglio.
+        """
+        img = load_image(image_input)
+        return self.deskew_by_angle(img)
+
     def deskew_by_angle(
         self,
         image_input: Union[str, Path, Image.Image, np.ndarray],
         max_angle: float = 45.0,
     ) -> Tuple[np.ndarray, float]:
-        """Corregge le leggere rotazioni di scansione (inclinazione testo) calcolando l'angolo."""
+        """Corregge le rotazioni e inclinazioni di scansione calcolando l'angolo con precisione sub-grado.
+
+        Combina:
+        1. Analisi morfologica delle righe di testo (metodo più affidabile per documenti).
+        2. Analisi minAreaRect con coordinate (x, y) corrette per grafica/disegni.
+        """
         img = load_image(image_input)
+        h, w = img.shape[:2]
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
 
-        # Inverti e binarizza per evidenziare il testo
+        # Inverti e binarizza per evidenziare il testo/inchiostro scuro su sfondo chiaro
         thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
-        # Trova tutti i punti dove ci sono pixel di testo/disegno
-        coords = np.column_stack(np.where(thresh > 0))
-        if len(coords) < 100:
-            return img, 0.0
+        # Metodo 1: Rilevamento orientamento righe di testo tramite dilatazione morfologica orizzontale
+        kernel_w = max(15, min(w // 25, 40))
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_w, 3))
+        dilated = cv2.dilate(thresh, kernel, iterations=2)
 
-        angle = cv2.minAreaRect(coords)[-1]
-        # minAreaRect restituisce angoli in [-90, 0] o simili
-        if angle < -45:
-            angle = -(90 + angle)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        angles = []
+        for c in contours:
+            if cv2.contourArea(c) < 300:
+                continue
+            rect = cv2.minAreaRect(c)
+            rw, rh = rect[1]
+            if rw < 10 or rh < 4:
+                continue
+            # Calcola angolo rispetto al lato lungo della riga di testo
+            ang = rect[2]
+            if rw < rh:
+                ang = ang - 90 if ang > 0 else ang + 90
+            if abs(ang) <= max_angle:
+                angles.append(ang)
+
+        angle = 0.0
+        if len(angles) >= 2:
+            angle = float(np.median(angles))
         else:
-            angle = -angle
+            # Metodo 2: Fallback su minAreaRect su tutti i punti attivi [x, y]
+            y_idx, x_idx = np.where(thresh > 0)
+            if len(x_idx) > 100:
+                coords = np.column_stack((x_idx, y_idx))
+                rect = cv2.minAreaRect(coords)
+                rw, rh = rect[1]
+                ang = rect[2]
+                if rw < rh:
+                    ang = ang - 90 if ang > 0 else ang + 90
+                if abs(ang) <= max_angle:
+                    angle = float(ang)
 
-        if abs(angle) > max_angle or abs(angle) < 0.2:
+        if abs(angle) < 0.15 or abs(angle) > max_angle:
             return img, 0.0
 
-        (h, w) = img.shape[:2]
         center = (w // 2, h // 2)
         rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
         rotated = cv2.warpAffine(

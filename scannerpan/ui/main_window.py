@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sys
 import logging
+import cv2
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 from PIL import Image
@@ -19,7 +20,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QGroupBox, QListWidget, QListWidgetItem,
     QMessageBox, QFileDialog, QFrame, QToolButton, QAbstractItemView
 )
-from PyQt6.QtGui import QAction, QIcon, QPixmap, QImage, QColor, QFont
+from PyQt6.QtGui import QAction, QIcon, QPixmap, QImage, QColor, QFont, QKeySequence
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QObject
 
 from scannerpan.ui.kde_theme import get_kde_icon, apply_breeze_theme, is_system_dark_mode
@@ -119,6 +120,11 @@ class MainWindow(QMainWindow):
         self.current_page_index: int = -1
         self.detected_subjects_cache: List[Dict[str, Any]] = []
 
+        # Undo / Redo history per page
+        self.undo_stacks: Dict[int, List[Image.Image]] = {}
+        self.redo_stacks: Dict[int, List[Image.Image]] = {}
+        self.is_preview_scan_running: bool = False
+
         # Background worker management
         self.worker_thread: Optional[QThread] = None
         self.worker: Optional[QObject] = None
@@ -186,19 +192,25 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
-        # 2. Scan Flatbed
+        # 2. Preview Scan (Scansione Anteprima)
+        self.act_preview = QAction(get_kde_icon("view-preview"), "Anteprima Rapida", self)
+        self.act_preview.setToolTip("Scansione rapida di anteprima a 100 DPI dal piano fisso")
+        self.act_preview.triggered.connect(self._start_preview_scan)
+        toolbar.addAction(self.act_preview)
+
+        # 3. Scan Flatbed
         self.act_scan_flatbed = QAction(get_kde_icon("document-scan"), "Piano Fisso", self)
         self.act_scan_flatbed.setToolTip("Scansiona una pagina dal piano fisso dello scanner")
         self.act_scan_flatbed.triggered.connect(lambda: self._start_scan(source="Flatbed"))
         toolbar.addAction(self.act_scan_flatbed)
 
-        # 3. Scan ADF
+        # 4. Scan ADF
         self.act_scan_adf = QAction(get_kde_icon("edit-copy"), "Alimentatore (ADF)", self)
         self.act_scan_adf.setToolTip("Scansiona fascicolo continuo dall'alimentatore automatico (ADF)")
         self.act_scan_adf.triggered.connect(lambda: self._start_scan(source="ADF", batch=True))
         toolbar.addAction(self.act_scan_adf)
 
-        # 4. Scan Duplex Wizard
+        # 5. Scan Duplex Wizard
         self.act_scan_duplex = QAction(get_kde_icon("media-playlist-repeat"), "Fronte / Retro", self)
         self.act_scan_duplex.setToolTip("Avvia la procedura guidata per scansionare fronte e retro")
         self.act_scan_duplex.triggered.connect(self._open_duplex_wizard)
@@ -206,7 +218,7 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
-        # 5. Detect Multi-Subjects (Photo / Receipts)
+        # 6. Detect Multi-Subjects (Photo / Receipts)
         self.act_detect_subjects = QAction(get_kde_icon("edit-cut"), "Riconosci Soggetti", self)
         self.act_detect_subjects.setToolTip("Rileva automaticamente foto o scontrini multipli sul piano fisso")
         self.act_detect_subjects.triggered.connect(self._run_multi_subject_detection)
@@ -214,7 +226,24 @@ class MainWindow(QMainWindow):
 
         toolbar.addSeparator()
 
-        # 6. Export / OCR
+        # 7. Undo / Redo for Image Enhancements
+        self.act_undo = QAction(get_kde_icon("edit-undo"), "Annulla", self)
+        self.act_undo.setShortcut(QKeySequence.StandardKey.Undo)
+        self.act_undo.setToolTip("Annulla l'ultimo miglioramento applicato all'immagine (Ctrl+Z)")
+        self.act_undo.triggered.connect(self._undo_current_page)
+        self.act_undo.setEnabled(False)
+        toolbar.addAction(self.act_undo)
+
+        self.act_redo = QAction(get_kde_icon("edit-redo"), "Ripristina", self)
+        self.act_redo.setShortcut(QKeySequence.StandardKey.Redo)
+        self.act_redo.setToolTip("Ripristina il miglioramento annullato (Ctrl+Shift+Z / Ctrl+Y)")
+        self.act_redo.triggered.connect(self._redo_current_page)
+        self.act_redo.setEnabled(False)
+        toolbar.addAction(self.act_redo)
+
+        toolbar.addSeparator()
+
+        # 8. Export / OCR
         self.act_export = QAction(get_kde_icon("document-save"), "Esporta / OCR...", self)
         self.act_export.setToolTip("Esporta in PDF ricercabile, DOCX, ODT, RTF, TXT o Immagini")
         self.act_export.triggered.connect(self._open_export_dialog)
@@ -281,21 +310,52 @@ class MainWindow(QMainWindow):
 
         self.btn_deskew = QPushButton("Raddrizza Inclinazione", proc_group)
         self.btn_deskew.setIcon(get_kde_icon("transform-rotate"))
+        self.btn_deskew.setToolTip("Rileva l'orientamento del testo e raddrizza il documento")
         self.btn_deskew.clicked.connect(self._apply_deskew_current_page)
         prg_layout.addWidget(self.btn_deskew)
 
         self.btn_autocrop = QPushButton("Ritaglio Automatico Margini", proc_group)
         self.btn_autocrop.setIcon(get_kde_icon("edit-cut"))
+        self.btn_autocrop.setToolTip("Rileva i bordi del foglio ed elimina i margini neri/vuoti")
         self.btn_autocrop.clicked.connect(self._apply_autocrop_current_page)
         prg_layout.addWidget(self.btn_autocrop)
 
         self.btn_enhance = QPushButton("Migliora Contrasto & Sfondo", proc_group)
         self.btn_enhance.setIcon(get_kde_icon("view-filter"))
+        self.btn_enhance.setToolTip("Sbianca lo sfondo ed esalta i caratteri del testo")
         self.btn_enhance.clicked.connect(self._apply_enhance_current_page)
         prg_layout.addWidget(self.btn_enhance)
+
+        # Undo / Redo Buttons for image improvements
+        undo_redo_layout = QHBoxLayout()
+        undo_redo_layout.setSpacing(6)
+
+        self.btn_undo = QPushButton("Annulla", proc_group)
+        self.btn_undo.setIcon(get_kde_icon("edit-undo"))
+        self.btn_undo.setToolTip("Annulla l'ultimo miglioramento/modifica applicato (Ctrl+Z)")
+        self.btn_undo.clicked.connect(self._undo_current_page)
+        self.btn_undo.setEnabled(False)
+        undo_redo_layout.addWidget(self.btn_undo)
+
+        self.btn_redo = QPushButton("Ripristina", proc_group)
+        self.btn_redo.setIcon(get_kde_icon("edit-redo"))
+        self.btn_redo.setToolTip("Ripristina il miglioramento annullato (Ctrl+Y)")
+        self.btn_redo.clicked.connect(self._redo_current_page)
+        self.btn_redo.setEnabled(False)
+        undo_redo_layout.addWidget(self.btn_redo)
+
+        prg_layout.addLayout(undo_redo_layout)
         s_layout.addWidget(proc_group)
 
         s_layout.addStretch()
+
+        # Fast Preview Scan Button
+        self.btn_preview = QPushButton("Scansione Anteprima", sidebar)
+        self.btn_preview.setIcon(get_kde_icon("view-preview"))
+        self.btn_preview.setFixedHeight(34)
+        self.btn_preview.setToolTip("Acquisisce rapidamente un'anteprima a 100 DPI dal piano fisso")
+        self.btn_preview.clicked.connect(self._start_preview_scan)
+        s_layout.addWidget(self.btn_preview)
 
         # Big Primary Scan Button
         self.btn_primary_scan = QPushButton("Scansiona Ora", sidebar)
@@ -491,23 +551,104 @@ class MainWindow(QMainWindow):
         else:
             self.current_page_index = -1
             self.canvas.set_image(None)
+        self._update_undo_redo_ui()
+
+    # --------------------------------------------------------------------------
+    # UNDO / REDO HISTORY MANAGEMENT
+    # --------------------------------------------------------------------------
+    def _push_undo_state(self, page_index: int):
+        """Salva lo stato corrente dell'immagine nello stack di Undo della pagina."""
+        if page_index < 0 or page_index >= len(self.current_pages):
+            return
+        if page_index not in self.undo_stacks:
+            self.undo_stacks[page_index] = []
+        # Salva una copia profonda dell'immagine prima della modifica
+        self.undo_stacks[page_index].append(self.current_pages[page_index].copy())
+        if len(self.undo_stacks[page_index]) > 25:
+            self.undo_stacks[page_index].pop(0)
+
+        # Ogni nuova modifica cancella la cronologia di Redo
+        self.redo_stacks[page_index] = []
+        self._update_undo_redo_ui()
+
+    def _undo_current_page(self):
+        """Annulla l'ultima modifica o miglioramento apportato alla pagina attiva (Ctrl+Z)."""
+        idx = self.current_page_index
+        if idx < 0 or idx not in self.undo_stacks or not self.undo_stacks[idx]:
+            self.status_lbl.setText("Nessuna azione da annullare.")
+            return
+
+        prev_img = self.undo_stacks[idx].pop()
+        if idx not in self.redo_stacks:
+            self.redo_stacks[idx] = []
+        self.redo_stacks[idx].append(self.current_pages[idx].copy())
+
+        self.current_pages[idx] = prev_img
+        self.canvas.set_image(prev_img)
+
+        # Aggiorna miniatura
+        thumb_pix = pil_to_qpixmap(prev_img).scaled(
+            90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+        if 0 <= idx < self.thumb_list.count():
+            self.thumb_list.item(idx).setIcon(QIcon(thumb_pix))
+
+        self.status_lbl.setText("Miglioramento annullato con successo (Undo).")
+        self._update_undo_redo_ui()
+
+    def _redo_current_page(self):
+        """Ripristina l'ultimo miglioramento precedentemente annullato (Ctrl+Y / Ctrl+Shift+Z)."""
+        idx = self.current_page_index
+        if idx < 0 or idx not in self.redo_stacks or not self.redo_stacks[idx]:
+            self.status_lbl.setText("Nessuna azione da ripristinare.")
+            return
+
+        next_img = self.redo_stacks[idx].pop()
+        if idx not in self.undo_stacks:
+            self.undo_stacks[idx] = []
+        self.undo_stacks[idx].append(self.current_pages[idx].copy())
+
+        self.current_pages[idx] = next_img
+        self.canvas.set_image(next_img)
+
+        # Aggiorna miniatura
+        thumb_pix = pil_to_qpixmap(next_img).scaled(
+            90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        )
+        if 0 <= idx < self.thumb_list.count():
+            self.thumb_list.item(idx).setIcon(QIcon(thumb_pix))
+
+        self.status_lbl.setText("Miglioramento ripristinato (Redo).")
+        self._update_undo_redo_ui()
+
+    def _update_undo_redo_ui(self):
+        """Aggiorna lo stato di abilitazione dei pulsanti e azioni Undo/Redo."""
+        idx = self.current_page_index
+        can_undo = bool(idx >= 0 and self.undo_stacks.get(idx))
+        can_redo = bool(idx >= 0 and self.redo_stacks.get(idx))
+
+        if hasattr(self, "act_undo"):
+            self.act_undo.setEnabled(can_undo)
+        if hasattr(self, "act_redo"):
+            self.act_redo.setEnabled(can_redo)
+        if hasattr(self, "btn_undo"):
+            self.btn_undo.setEnabled(can_undo)
+        if hasattr(self, "btn_redo"):
+            self.btn_redo.setEnabled(can_redo)
 
     def _rotate_current_page(self, angle: int):
         if 0 <= self.current_page_index < len(self.current_pages):
+            self._push_undo_state(self.current_page_index)
             cur = self.current_pages[self.current_page_index]
-            # PIL rotate: expand=True to preserve boundaries
-            # angle: 90 is counterclockwise in PIL, so -angle matches clockwise intuition
             rotated = cur.rotate(-angle, expand=True)
             self.current_pages[self.current_page_index] = rotated
 
-            # Update thumbnail
             thumb_pix = pil_to_qpixmap(rotated).scaled(
                 90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
             )
             item = self.thumb_list.item(self.current_page_index)
             item.setIcon(QIcon(thumb_pix))
 
-            # Update canvas
             self.canvas.set_image(rotated)
             self.status_lbl.setText(f"Pagina ruotata di {angle}°.")
 
@@ -515,8 +656,11 @@ class MainWindow(QMainWindow):
         if 0 <= self.current_page_index < len(self.current_pages):
             row = self.current_page_index
             del self.current_pages[row]
+            # Ripulisci cronologia undo per la pagina eliminata
+            self.undo_stacks.pop(row, None)
+            self.redo_stacks.pop(row, None)
             self.thumb_list.takeItem(row)
-            # Renumber remaining
+
             for i in range(self.thumb_list.count()):
                 self.thumb_list.item(i).setText(f"Pagina {i+1}")
             if self.current_pages:
@@ -526,32 +670,105 @@ class MainWindow(QMainWindow):
                 self.current_page_index = -1
                 self.canvas.set_image(None)
             self.status_lbl.setText("Pagina eliminata.")
+            self._update_undo_redo_ui()
 
     # --------------------------------------------------------------------------
-    # CV & IMAGE ENHANCEMENTS
+    # FAST PREVIEW SCAN (SCANSIONE ANTEPRIMA)
+    # --------------------------------------------------------------------------
+    def _start_preview_scan(self):
+        """Esegue una scansione rapida di anteprima (100 DPI) dal piano fisso."""
+        opts = self._get_selected_options(override_source="Flatbed")
+        opts.resolution = 100
+        opts.source = "Flatbed"
+        opts.adf_batch = False
+
+        self._set_ui_busy(True, "Scansione rapida anteprima in corso (100 DPI)...")
+
+        self.worker_thread = QThread()
+        self.worker = ScanWorker(self.sane_engine, opts)
+        self.worker.moveToThread(self.worker_thread)
+
+        self.worker_thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self._on_scan_progress)
+        self.worker.finished.connect(self._on_preview_scan_finished)
+        self.worker.error.connect(self._on_scan_error)
+
+        self.worker_thread.start()
+
+    def _on_preview_scan_finished(self, scan_result: ScanResult):
+        self._set_ui_busy(False)
+        if not scan_result.success or not scan_result.images:
+            QMessageBox.critical(
+                self, "Errore Anteprima",
+                f"Impossibile acquisire l'anteprima: {scan_result.error_message or 'Nessun dato immagine.'}"
+            )
+            return
+
+        pil_imgs = scan_result.load_pil_images()
+        if not pil_imgs:
+            return
+
+        preview_img = pil_imgs[0]
+        self._add_scanned_page(preview_img)
+
+        # Rileva automaticamente i contorni del foglio e imposta il crop sull'anteprima
+        cv_img = pil_to_cv(preview_img)
+        boundary = self.cv_detector.detect_document_boundary(cv_img)
+        if boundary is not None:
+            bx, by, bw, bh = cv2.boundingRect(boundary)
+            self.canvas.set_crop_rect(float(bx), float(by), float(bw), float(bh))
+            self.status_lbl.setText("Anteprima acquisita (100 DPI). Bordi foglio rilevati: clicca 'Scansiona Ora' per la risoluzione finale.")
+        else:
+            self.status_lbl.setText("Anteprima acquisita (100 DPI). Posizione verificata: clicca 'Scansiona Ora' per l'acquisizione definitiva.")
+
+    # --------------------------------------------------------------------------
+    # CV & IMAGE ENHANCEMENTS WITH UNDO SUPPORT
     # --------------------------------------------------------------------------
     def _apply_deskew_current_page(self):
         if self.current_page_index < 0 or not self.current_pages:
+            self.status_lbl.setText("Nessuna scansione selezionata da raddrizzare.")
             return
+
         img = self.current_pages[self.current_page_index]
-        self.status_lbl.setText("Analisi inclinazione e correzione prospettica...")
+        self.status_lbl.setText("Analisi inclinazione e correzione ottica in corso...")
         cv_img = pil_to_cv(img)
-        deskewed = self.cv_detector.deskew_and_crop_document(cv_img)
-        new_img = cv_to_pil(deskewed)
 
-        self.current_pages[self.current_page_index] = new_img
-        self.canvas.set_image(new_img)
+        try:
+            # Esegue il deskew basato sull'orientamento del testo o dei bordi
+            deskew_res = self.cv_detector.deskew_document(cv_img)
+            if isinstance(deskew_res, tuple) and len(deskew_res) >= 2:
+                deskewed_cv, angle = deskew_res[0], float(deskew_res[1])
+            elif isinstance(deskew_res, tuple):
+                deskewed_cv, angle = deskew_res[0], 0.0
+            else:
+                deskewed_cv, angle = deskew_res, 0.0
 
-        # Update thumb
-        thumb_pix = pil_to_qpixmap(new_img).scaled(
-            90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
-        )
-        self.thumb_list.item(self.current_page_index).setIcon(QIcon(thumb_pix))
-        self.status_lbl.setText("Raddrizzamento completato.")
+            if abs(angle) < 0.15:
+                self.status_lbl.setText("Il documento risulta già dritto (inclinazione < 0.2°).")
+                return
+
+            # Salva stato per Undo prima di aggiornare
+            self._push_undo_state(self.current_page_index)
+
+            new_img = cv_to_pil(deskewed_cv)
+            self.current_pages[self.current_page_index] = new_img
+            self.canvas.set_image(new_img)
+
+            # Aggiorna miniatura
+            thumb_pix = pil_to_qpixmap(new_img).scaled(
+                90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            )
+            self.thumb_list.item(self.current_page_index).setIcon(QIcon(thumb_pix))
+            self.status_lbl.setText(f"Inclinazione raddrizzata con successo (corretti {angle:+.1f}°).")
+        except Exception as exc:
+            logger.error("Errore raddrizzamento inclinazione: %s", exc, exc_info=True)
+            self.status_lbl.setText(f"Errore durante il raddrizzamento: {exc}")
 
     def _apply_autocrop_current_page(self):
         if self.current_page_index < 0 or not self.current_pages:
             return
+
+        self._push_undo_state(self.current_page_index)
         img = self.current_pages[self.current_page_index]
         self.status_lbl.setText("Ritaglio automatico dei margini...")
         cv_img = pil_to_cv(img)
@@ -570,6 +787,8 @@ class MainWindow(QMainWindow):
     def _apply_enhance_current_page(self):
         if self.current_page_index < 0 or not self.current_pages:
             return
+
+        self._push_undo_state(self.current_page_index)
         img = self.current_pages[self.current_page_index]
         self.status_lbl.setText("Miglioramento contrasto e rimozione sfondo...")
         cv_img = pil_to_cv(img)
@@ -583,7 +802,7 @@ class MainWindow(QMainWindow):
             90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
         )
         self.thumb_list.item(self.current_page_index).setIcon(QIcon(thumb_pix))
-        self.status_lbl.setText("Miglioramento applicato.")
+        self.status_lbl.setText("Miglioramento contrasto e sfondo applicato.")
 
     # --------------------------------------------------------------------------
     # MULTI-SUBJECT DETECTION & WIZARDS
