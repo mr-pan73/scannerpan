@@ -124,6 +124,7 @@ class MainWindow(QMainWindow):
         self.undo_stacks: Dict[int, List[Image.Image]] = {}
         self.redo_stacks: Dict[int, List[Image.Image]] = {}
         self.is_preview_scan_running: bool = False
+        self._has_preview_page: bool = False
 
         # Background worker management
         self.worker_thread: Optional[QThread] = None
@@ -475,6 +476,28 @@ class MainWindow(QMainWindow):
             format="png"
         )
 
+    def _is_busy(self) -> bool:
+        """Controlla in modo sicuro se c'è un'operazione di scansione o esportazione attiva."""
+        if self.worker_thread is None:
+            return False
+        try:
+            return bool(self.worker_thread.isRunning())
+        except (RuntimeError, AttributeError):
+            self.worker_thread = None
+            return False
+
+    def _cleanup_worker(self):
+        """Ripulisce in modo sicuro il thread di background e il worker."""
+        if self.worker_thread is not None:
+            try:
+                if self.worker_thread.isRunning():
+                    self.worker_thread.quit()
+                    self.worker_thread.wait(600)
+            except (RuntimeError, AttributeError):
+                pass
+            self.worker_thread = None
+        self.worker = None
+
     def _start_scan_from_sidebar(self):
         self._start_scan()
 
@@ -483,7 +506,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Nessuno scanner selezionato o rilevato.")
             return
 
-        if self.worker_thread is not None and self.worker_thread.isRunning():
+        if self._is_busy():
             self.status_lbl.setText("Un'acquisizione è già in corso. Attendi il completamento...")
             return
 
@@ -502,7 +525,7 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self.worker_thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker.error.connect(self.worker_thread.quit)
-        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.finished.connect(self._cleanup_worker)
 
         self.worker_thread.start()
 
@@ -514,9 +537,7 @@ class MainWindow(QMainWindow):
 
     def _on_scan_finished(self, result: ScanResult):
         self._set_ui_busy(False)
-        if self.worker_thread is not None and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            self.worker_thread.wait(500)
+        self._cleanup_worker()
 
         if not result.success:
             QMessageBox.critical(self, "Errore Scansione", f"Scansione fallita: {result.error_message}")
@@ -528,6 +549,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Nessuna Immagine", "Nessun file immagine restituito dallo scanner.")
             return
 
+        # Se avevamo una pagina di sola anteprima a 100 DPI, rimuovila prima di aggiungere la scansione reale
+        if self._has_preview_page and len(self.current_pages) == 1:
+            self.current_pages.clear()
+            self.thumb_list.clear()
+            self.undo_stacks.clear()
+            self.redo_stacks.clear()
+            self.current_page_index = -1
+            self.canvas.set_crop_rect(None)
+            self._has_preview_page = False
+
         for img in pil_imgs:
             self._add_scanned_page(img)
 
@@ -535,9 +566,7 @@ class MainWindow(QMainWindow):
 
     def _on_scan_error(self, err_msg: str):
         self._set_ui_busy(False)
-        if self.worker_thread is not None and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            self.worker_thread.wait(500)
+        self._cleanup_worker()
         QMessageBox.critical(self, "Errore", f"Si è verificato un errore: {err_msg}")
         self.status_lbl.setText("Errore durante l'acquisizione.")
 
@@ -694,7 +723,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Nessuno scanner selezionato o rilevato.")
             return
 
-        if self.worker_thread is not None and self.worker_thread.isRunning():
+        if self._is_busy():
             self.status_lbl.setText("Un'acquisizione è già in corso. Attendi il completamento...")
             return
 
@@ -717,15 +746,13 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self.worker_thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
         self.worker.error.connect(self.worker_thread.quit)
-        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+        self.worker_thread.finished.connect(self._cleanup_worker)
 
         self.worker_thread.start()
 
     def _on_preview_scan_finished(self, scan_result: ScanResult):
         self._set_ui_busy(False)
-        if self.worker_thread is not None and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            self.worker_thread.wait(500)
+        self._cleanup_worker()
 
         if not scan_result.success or not scan_result.images:
             QMessageBox.critical(
@@ -739,17 +766,39 @@ class MainWindow(QMainWindow):
             return
 
         preview_img = pil_imgs[0]
-        self._add_scanned_page(preview_img)
+        # Se c'era già un'anteprima come unica pagina, sostituiscila con la nuova
+        if self._has_preview_page and len(self.current_pages) == 1:
+            self.current_pages[0] = preview_img
+            thumb_pix = pil_to_qpixmap(preview_img).scaled(
+                90, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            )
+            item = self.thumb_list.item(0)
+            if item:
+                item.setIcon(QIcon(thumb_pix))
+                item.setText("Anteprima (100 DPI)")
+            self.canvas.set_image(preview_img)
+        else:
+            self._add_scanned_page(preview_img)
+            self._has_preview_page = True
+            item = self.thumb_list.item(self.current_page_index)
+            if item:
+                item.setText("Anteprima (100 DPI)")
 
         # Rileva automaticamente i contorni del foglio e imposta il crop sull'anteprima
-        cv_img = pil_to_cv(preview_img)
-        boundary = self.cv_detector.detect_document_boundary(cv_img)
-        if boundary is not None:
-            bx, by, bw, bh = cv2.boundingRect(boundary)
-            self.canvas.set_crop_rect(float(bx), float(by), float(bw), float(bh))
-            self.status_lbl.setText("Anteprima acquisita (100 DPI). Bordi foglio rilevati: clicca 'Scansiona Ora' per la risoluzione finale.")
-        else:
-            self.status_lbl.setText("Anteprima acquisita (100 DPI). Posizione verificata: clicca 'Scansiona Ora' per l'acquisizione definitiva.")
+        try:
+            cv_img = pil_to_cv(preview_img)
+            boundary = self.cv_detector.detect_document_boundary(cv_img)
+            if boundary is not None:
+                bx, by, bw, bh = cv2.boundingRect(boundary)
+                self.canvas.set_crop_rect(float(bx), float(by), float(bw), float(bh))
+                self.status_lbl.setText("Anteprima acquisita (100 DPI). Bordi foglio rilevati: clicca 'Scansiona Ora' per la scansione finale.")
+            else:
+                self.canvas.set_crop_rect(None)
+                self.status_lbl.setText("Anteprima acquisita (100 DPI). Posizione verificata: clicca 'Scansiona Ora' per la scansione finale.")
+        except Exception as exc:
+            logger.error("Errore elaborazione anteprima: %s", exc)
+            self.canvas.set_crop_rect(None)
+            self.status_lbl.setText("Anteprima acquisita (100 DPI). Clicca 'Scansiona Ora' per l'acquisizione definitiva.")
 
     # --------------------------------------------------------------------------
     # CV & IMAGE ENHANCEMENTS WITH UNDO SUPPORT
@@ -962,7 +1011,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Non ci sono pagine scansionate da esportare.")
             return
 
-        if self.worker_thread is not None and self.worker_thread.isRunning():
+        if self._is_busy():
             self.status_lbl.setText("Un'operazione è già in corso. Attendi il completamento...")
             return
 
@@ -988,15 +1037,13 @@ class MainWindow(QMainWindow):
             self.worker.finished.connect(self.worker_thread.quit)
             self.worker.finished.connect(self.worker.deleteLater)
             self.worker.error.connect(self.worker_thread.quit)
-            self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+            self.worker_thread.finished.connect(self._cleanup_worker)
 
             self.worker_thread.start()
 
     def _on_export_finished(self, success: bool):
         self._set_ui_busy(False)
-        if self.worker_thread is not None and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            self.worker_thread.wait(500)
+        self._cleanup_worker()
 
         if success:
             QMessageBox.information(self, "Esportazione", "File esportato con successo!")

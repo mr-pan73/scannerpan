@@ -116,8 +116,17 @@ class CanvasViewport(QWidget):
         self.update()
         self.selection_changed.emit(self.get_selected_subjects())
 
-    def set_crop_rect(self, rect: Optional[Tuple[float, float, float, float]]):
-        self._crop_rect = rect
+    def set_crop_rect(self, *args):
+        if len(args) == 1:
+            val = args[0]
+            if val is None or isinstance(val, (tuple, list)):
+                self._crop_rect = val
+            else:
+                self._crop_rect = None
+        elif len(args) == 4:
+            self._crop_rect = (float(args[0]), float(args[1]), float(args[2]), float(args[3]))
+        else:
+            self._crop_rect = None
         self.update()
 
     def get_selected_subjects(self) -> List[Dict[str, Any]]:
@@ -520,8 +529,8 @@ class InteractiveCanvas(QWidget):
         self.viewport.set_subjects(subjects)
         self._update_subject_label()
 
-    def set_crop_rect(self, rect: Optional[Tuple[float, float, float, float]]):
-        self.viewport.set_crop_rect(rect)
+    def set_crop_rect(self, *args):
+        self.viewport.set_crop_rect(*args)
 
     def get_selected_subjects(self) -> List[Dict[str, Any]]:
         return self.viewport.get_selected_subjects()
