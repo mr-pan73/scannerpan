@@ -180,8 +180,9 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------------------------------
     def _create_toolbar(self):
         toolbar = QToolBar("Barra Strumenti Principale", self)
-        toolbar.setIconSize(QSize(24, 24))
+        toolbar.setIconSize(QSize(22, 22))
         toolbar.setMovable(False)
+        toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
         # 1. Detect Scanner
@@ -193,7 +194,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
 
         # 2. Preview Scan (Scansione Anteprima)
-        self.act_preview = QAction(get_kde_icon("view-preview"), "Anteprima Rapida", self)
+        self.act_preview = QAction(get_kde_icon("view-preview"), "Anteprima", self)
         self.act_preview.setToolTip("Scansione rapida di anteprima a 100 DPI dal piano fisso")
         self.act_preview.triggered.connect(self._start_preview_scan)
         toolbar.addAction(self.act_preview)
@@ -205,7 +206,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.act_scan_flatbed)
 
         # 4. Scan ADF
-        self.act_scan_adf = QAction(get_kde_icon("edit-copy"), "Alimentatore (ADF)", self)
+        self.act_scan_adf = QAction(get_kde_icon("edit-copy"), "ADF Fascicolo", self)
         self.act_scan_adf.setToolTip("Scansiona fascicolo continuo dall'alimentatore automatico (ADF)")
         self.act_scan_adf.triggered.connect(lambda: self._start_scan(source="ADF", batch=True))
         toolbar.addAction(self.act_scan_adf)
@@ -482,6 +483,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Nessuno scanner selezionato o rilevato.")
             return
 
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.status_lbl.setText("Un'acquisizione è già in corso. Attendi il completamento...")
+            return
+
         options = self._get_selected_options(override_source=source, batch=batch)
         self._set_ui_busy(True, f"Scansione in corso ({options.source} @ {options.resolution} DPI)...")
 
@@ -496,6 +501,7 @@ class MainWindow(QMainWindow):
 
         self.worker.finished.connect(self.worker_thread.quit)
         self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.worker_thread.quit)
         self.worker_thread.finished.connect(self.worker_thread.deleteLater)
 
         self.worker_thread.start()
@@ -508,6 +514,10 @@ class MainWindow(QMainWindow):
 
     def _on_scan_finished(self, result: ScanResult):
         self._set_ui_busy(False)
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.worker_thread.quit()
+            self.worker_thread.wait(500)
+
         if not result.success:
             QMessageBox.critical(self, "Errore Scansione", f"Scansione fallita: {result.error_message}")
             self.status_lbl.setText("Scansione fallita.")
@@ -525,6 +535,9 @@ class MainWindow(QMainWindow):
 
     def _on_scan_error(self, err_msg: str):
         self._set_ui_busy(False)
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.worker_thread.quit()
+            self.worker_thread.wait(500)
         QMessageBox.critical(self, "Errore", f"Si è verificato un errore: {err_msg}")
         self.status_lbl.setText("Errore durante l'acquisizione.")
 
@@ -677,6 +690,14 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------------------------------
     def _start_preview_scan(self):
         """Esegue una scansione rapida di anteprima (100 DPI) dal piano fisso."""
+        if not self.combo_devices.count():
+            QMessageBox.warning(self, "Attenzione", "Nessuno scanner selezionato o rilevato.")
+            return
+
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.status_lbl.setText("Un'acquisizione è già in corso. Attendi il completamento...")
+            return
+
         opts = self._get_selected_options(override_source="Flatbed")
         opts.resolution = 100
         opts.source = "Flatbed"
@@ -693,10 +714,19 @@ class MainWindow(QMainWindow):
         self.worker.finished.connect(self._on_preview_scan_finished)
         self.worker.error.connect(self._on_scan_error)
 
+        self.worker.finished.connect(self.worker_thread.quit)
+        self.worker.finished.connect(self.worker.deleteLater)
+        self.worker.error.connect(self.worker_thread.quit)
+        self.worker_thread.finished.connect(self.worker_thread.deleteLater)
+
         self.worker_thread.start()
 
     def _on_preview_scan_finished(self, scan_result: ScanResult):
         self._set_ui_busy(False)
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.worker_thread.quit()
+            self.worker_thread.wait(500)
+
         if not scan_result.success or not scan_result.images:
             QMessageBox.critical(
                 self, "Errore Anteprima",
@@ -932,6 +962,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Non ci sono pagine scansionate da esportare.")
             return
 
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.status_lbl.setText("Un'operazione è già in corso. Attendi il completamento...")
+            return
+
         dlg = ExportOCRDialog(self, default_filename=f"Scansione_Pagine_{len(self.current_pages)}")
         if dlg.exec() == ExportOCRDialog.DialogCode.Accepted:
             opts = dlg.export_options
@@ -953,12 +987,17 @@ class MainWindow(QMainWindow):
 
             self.worker.finished.connect(self.worker_thread.quit)
             self.worker.finished.connect(self.worker.deleteLater)
+            self.worker.error.connect(self.worker_thread.quit)
             self.worker_thread.finished.connect(self.worker_thread.deleteLater)
 
             self.worker_thread.start()
 
     def _on_export_finished(self, success: bool):
         self._set_ui_busy(False)
+        if self.worker_thread is not None and self.worker_thread.isRunning():
+            self.worker_thread.quit()
+            self.worker_thread.wait(500)
+
         if success:
             QMessageBox.information(self, "Esportazione", "File esportato con successo!")
             self.status_lbl.setText("Esportazione completata.")
@@ -970,8 +1009,25 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(busy)
         if busy:
             self.status_lbl.setText(message)
-        self.act_scan_flatbed.setEnabled(not busy)
-        self.act_scan_adf.setEnabled(not busy)
-        self.act_scan_duplex.setEnabled(not busy)
-        self.act_export.setEnabled(not busy)
-        self.btn_primary_scan.setEnabled(not busy)
+        if hasattr(self, "act_preview"):
+            self.act_preview.setEnabled(not busy)
+        if hasattr(self, "btn_preview"):
+            self.btn_preview.setEnabled(not busy)
+        if hasattr(self, "act_scan_flatbed"):
+            self.act_scan_flatbed.setEnabled(not busy)
+        if hasattr(self, "act_scan_adf"):
+            self.act_scan_adf.setEnabled(not busy)
+        if hasattr(self, "act_scan_duplex"):
+            self.act_scan_duplex.setEnabled(not busy)
+        if hasattr(self, "act_export"):
+            self.act_export.setEnabled(not busy)
+        if hasattr(self, "btn_primary_scan"):
+            self.btn_primary_scan.setEnabled(not busy)
+        if hasattr(self, "btn_deskew"):
+            self.btn_deskew.setEnabled(not busy)
+        if hasattr(self, "btn_autocrop"):
+            self.btn_autocrop.setEnabled(not busy)
+        if hasattr(self, "btn_enhance"):
+            self.btn_enhance.setEnabled(not busy)
+        if hasattr(self, "act_detect_subjects"):
+            self.act_detect_subjects.setEnabled(not busy)
