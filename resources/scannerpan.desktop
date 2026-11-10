@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=ScannerPan
+GenericName=Scanner & OCR
+GenericName[it]=Scanner & OCR
+Comment=Modern Linux / KDE scanning application with multi-subject detection and OCR
+Comment[it]=Applicazione moderna di scansione per KDE e Linux con rilevamento foto/scontrini e OCR
+Exec=/usr/bin/scannerpan %U
+Icon=scannerpan
+Terminal=false
+Type=Application
+Categories=Graphics;Scanning;RasterGraphics;
+Keywords=scan;scanner;sane;ocr;document;photo;flatbed;adf;brother;
+StartupNotify=true
+StartupWMClass=ScannerPan
