@@ -194,33 +194,25 @@ class OCREngine:
             confidences: List[float] = []
 
             for page_num, p in enumerate(temp_paths, start=1):
-                # Esegui tesseract estraendo sia TSV (dati analitici parole/confidenza) che testo puro
+                # Esegui tesseract in una singola passata ottimizzata con --dpi e invert=0
                 cmd_tsv = [
                     self.tesseract_bin,
                     str(p),
                     "stdout",
                     "-l", valid_lang,
-                    f"--psm", str(psm),
+                    "--psm", str(psm),
+                    "--dpi", "300",
+                    "-c", "tessedit_do_invert=0",
                     "tsv"
                 ]
                 proc_tsv = subprocess.run(cmd_tsv, capture_output=True, text=True, check=False)
                 if proc_tsv.returncode == 0:
-                    page_words, page_conf = self._parse_tsv(proc_tsv.stdout, page_num)
+                    page_words, page_conf, page_txt = self._parse_tsv(proc_tsv.stdout, page_num)
                     all_words.extend(page_words)
                     if page_conf > 0:
                         confidences.append(page_conf)
-
-                # Testo pulito
-                cmd_txt = [
-                    self.tesseract_bin,
-                    str(p),
-                    "stdout",
-                    "-l", valid_lang,
-                    f"--psm", str(psm),
-                ]
-                proc_txt = subprocess.run(cmd_txt, capture_output=True, text=True, check=False)
-                if proc_txt.returncode == 0:
-                    full_texts.append(proc_txt.stdout.strip())
+                    if page_txt:
+                        full_texts.append(page_txt)
 
             final_text = "\n\n--- Nuova Pagina ---\n\n".join(full_texts) if len(full_texts) > 1 else (full_texts[0] if full_texts else "")
             avg_confidence = float(sum(confidences) / len(confidences)) if confidences else 0.0
@@ -244,10 +236,11 @@ class OCREngine:
             except Exception:
                 pass
 
-    def _parse_tsv(self, tsv_output: str, page_num: int) -> Tuple[List[OCRWord], float]:
-        """Effettua il parsing dell'output TSV di tesseract per estrarre parole, bounding box e confidenze."""
+    def _parse_tsv(self, tsv_output: str, page_num: int) -> Tuple[List[OCRWord], float, str]:
+        """Effettua il parsing dell'output TSV di tesseract per estrarre parole, bounding box, confidenze e testo pulito."""
         words: List[OCRWord] = []
         confs: List[float] = []
+        line_dict: Dict[int, List[str]] = {}
 
         reader = csv.DictReader(io.StringIO(tsv_output), delimiter="\t")
         for row in reader:
@@ -275,9 +268,11 @@ class OCREngine:
                     )
                 )
                 confs.append(conf)
+                line_dict.setdefault(line_num, []).append(txt)
 
         avg_conf = float(sum(confs) / len(confs)) if confs else 0.0
-        return words, avg_conf
+        reconstructed_text = "\n".join(" ".join(line_words) for _, line_words in sorted(line_dict.items()))
+        return words, avg_conf, reconstructed_text
 
     # =========================================================================
     # ESPORTAZIONE DOCUMENTI

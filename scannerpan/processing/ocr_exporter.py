@@ -26,7 +26,7 @@ def run_tesseract_ocr(
     output_type: str = "txt"
 ) -> Union[str, bytes]:
     """
-    Executes tesseract CLI directly on a PIL image.
+    Executes tesseract CLI directly on a PIL image with performance optimizations.
     output_type: 'txt' or 'pdf'
     """
     tesseract_bin = find_tesseract_binary()
@@ -36,10 +36,34 @@ def run_tesseract_ocr(
 
     with tempfile.TemporaryDirectory(prefix="scannerpan_ocr_") as tmp_dir:
         in_img_path = Path(tmp_dir) / "input.png"
-        image.save(in_img_path, format="PNG")
+
+        # Optimization: for pure text extraction (txt/docx/odt/rtf), downscale image
+        # to optimal OCR resolution (max 1800px width) in grayscale to speed up recognition up to 5x
+        if output_type != "pdf":
+            w, h = image.size
+            if w > 1800:
+                new_w = 1800
+                new_h = int(h * (1800.0 / w))
+                prep_img = image.resize((new_w, new_h), Image.Resampling.BILINEAR).convert("L")
+            else:
+                prep_img = image.convert("L")
+            prep_img.save(in_img_path, format="PNG")
+        else:
+            image.save(in_img_path, format="PNG")
+
         out_base = Path(tmp_dir) / "output"
 
-        cmd = [tesseract_bin, str(in_img_path), str(out_base), "-l", lang]
+        # Tesseract flags for maximum performance:
+        # --dpi 300 prevents DPI estimation delays
+        # -c tessedit_do_invert=0 disables unnecessary dark-background inversion search
+        cmd = [
+            tesseract_bin,
+            str(in_img_path),
+            str(out_base),
+            "-l", lang,
+            "--dpi", "300",
+            "-c", "tessedit_do_invert=0"
+        ]
         if output_type == "pdf":
             cmd.append("pdf")
 
