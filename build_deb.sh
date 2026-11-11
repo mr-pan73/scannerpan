@@ -69,7 +69,9 @@ chmod 644 "${BUILD_ROOT}/usr/share/applications/scannerpan.desktop"
 cp "${SCRIPT_DIR}/resources/scannerpan.svg" "${BUILD_ROOT}/usr/share/icons/hicolor/scalable/apps/scannerpan.svg"
 chmod 644 "${BUILD_ROOT}/usr/share/icons/hicolor/scalable/apps/scannerpan.svg"
 
-# 7. Documentazione / copyright
+# 7. Documentazione, crediti IA e copyright
+cp "${SCRIPT_DIR}/README.md" "${BUILD_ROOT}/usr/share/doc/scannerpan/README.md" 2>/dev/null || true
+cp "${SCRIPT_DIR}/AI_CREDITS.md" "${BUILD_ROOT}/usr/share/doc/scannerpan/AI_CREDITS.md" 2>/dev/null || true
 cat << 'EOF' > "${BUILD_ROOT}/usr/share/doc/scannerpan/copyright"
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: ScannerPan

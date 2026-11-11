@@ -97,3 +97,21 @@ oppure manualmente tramite PyInstaller:
 python -m PyInstaller --clean scannerpan.spec
 ```
 L'eseguibile `.exe` verrà generato nella cartella `dist\ScannerPan.exe`.
+
+---
+
+## 🤖 Sviluppo & Intelligenza Artificiale (AI Credits)
+
+Questo progetto è stato ideato, sviluppato e ottimizzato con il supporto avanzato dell'Intelligenza Artificiale:
+
+* **Assistente Agente IA:** **Antigravity** (Google DeepMind - Advanced Agentic Coding)
+* **Modello Linguistico:** **Google Gemini 2.5 Pro**
+* **Sviluppatore Umano & System Architect:** **Marco Panista** (`mr-pan73` / `mrpan-group`)
+* **Documentazione Dettagliata:** consulta [AI_CREDITS.md](AI_CREDITS.md) per l'elenco completo dei moduli, algoritmi di Computer Vision e pipeline OCR progettati dall'IA.
+
+### Contributi Principali dell'IA:
+1. **Computer Vision (OpenCV):** Algoritmi per il ritaglio automatico dei bordi, rimozione margini neri, raddrizzamento dell'inclinazione (*Deskew* con trasformata di Hough) e segmentazione intelligente di scontrini/foto multiple.
+2. **Interfaccia Grafica (PyQt6):** Piena aderenza allo stile grafico KDE Breeze (Light e Dark), supporto al rilevamento del tema di Windows 11 (`AppsUseLightTheme`) e canvas reattivo non distruttivo con Undo/Redo.
+3. **Pipeline Hardware & OCR:** Integrazione SANE / eSCL AirScan e ottimizzazione del motore OCR (passata singola unificata, riduzione tempi a ~0.19s/pagina).
+4. **Packaging Multipiattaforma:** Pacchettizzazione per Linux Debian (`.deb`) e Windows 11 a 64-bit (`ScannerPan.exe`).
+
