@@ -100,18 +100,19 @@ L'eseguibile `.exe` verrà generato nella cartella `dist\ScannerPan.exe`.
 
 ---
 
-## 🤖 Sviluppo & Intelligenza Artificiale (AI Credits)
+## 🤖 Development & Artificial Intelligence (AI Credits)
 
-Questo progetto è stato ideato, sviluppato e ottimizzato con il supporto avanzato dell'Intelligenza Artificiale:
+This project is designed, architected, and continuously developed with the assistance of Artificial Intelligence:
 
-* **Assistente Agente IA:** **Antigravity** (Google DeepMind - Advanced Agentic Coding)
-* **Modello Linguistico:** **Google Gemini 2.5 Pro**
-* **Sviluppatore Umano & System Architect:** **Marco Panista** (`mr-pan73` / `mrpan-group`)
-* **Documentazione Dettagliata:** consulta [AI_CREDITS.md](AI_CREDITS.md) per l'elenco completo dei moduli, algoritmi di Computer Vision e pipeline OCR progettati dall'IA.
+* **AI Agent Platform:** **Antigravity** (Google DeepMind - Advanced Agentic Coding)
+* **Core Foundation Model:** **Google Gemini 2.5 Pro**
+* **Human Creator & System Architect:** **Marco Panista** (`mr-pan73` / `mrpan-group`)
+* **Detailed Documentation:** see [AI_CREDITS.md](AI_CREDITS.md) for full architectural breakdown and AI-authored subsystems.
 
-### Contributi Principali dell'IA:
-1. **Computer Vision (OpenCV):** Algoritmi per il ritaglio automatico dei bordi, rimozione margini neri, raddrizzamento dell'inclinazione (*Deskew* con trasformata di Hough) e segmentazione intelligente di scontrini/foto multiple.
-2. **Interfaccia Grafica (PyQt6):** Piena aderenza allo stile grafico KDE Breeze (Light e Dark), supporto al rilevamento del tema di Windows 11 (`AppsUseLightTheme`) e canvas reattivo non distruttivo con Undo/Redo.
-3. **Pipeline Hardware & OCR:** Integrazione SANE / eSCL AirScan e ottimizzazione del motore OCR (passata singola unificata, riduzione tempi a ~0.19s/pagina).
-4. **Packaging Multipiattaforma:** Pacchettizzazione per Linux Debian (`.deb`) e Windows 11 a 64-bit (`ScannerPan.exe`).
+### Key AI Contributions:
+1. **Computer Vision (OpenCV):** Automatic border detection, black edge suppression, Hough-based deskewing, and intelligent multi-subject segmentation (receipts and photos).
+2. **User Interface (PyQt6):** Full compliance with KDE Breeze design system (Light/Dark), Windows 11 registry theme detection (`AppsUseLightTheme`), and responsive non-destructive undo/redo canvas.
+3. **Hardware & OCR Engines:** SANE / eSCL AirScan protocol integration and high-speed single-pass OCR pipeline (~0.19s/page).
+4. **Cross-Platform Packaging:** Standalone packages for Debian/Ubuntu (`.deb`) and 64-bit Windows 11 (`ScannerPan.exe`).
+
 

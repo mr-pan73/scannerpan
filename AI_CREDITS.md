@@ -1,57 +1,55 @@
-# 🤖 Riferimenti Intelligenza Artificiale (AI Credits)
+# 🤖 Artificial Intelligence Credits (AI Credits)
 
-Questo progetto, **ScannerPan**, è stato progettato, sviluppato e ottimizzato con il supporto avanzato dell'Intelligenza Artificiale.
-
----
-
-## 🧠 Modello e Strumenti IA Utilizzati
-
-* **Assistente Agente IA:** **Antigravity** (Google DeepMind - Advanced Agentic Coding)
-* **Modello Linguistico di Riferimento:** **Google Gemini 2.5 Pro**
-* **Ambiente Operativo:** Linux Ubuntu x86_64 / KDE Plasma / Wine Environment
-* **Sviluppatore Umano & System Architect:** **Marco Panista** (`mr-pan73` / `mrpan-group`)
-* **Repository GitLab:** [https://gitlab.com/mrpan-group/scannerpan](https://gitlab.com/mrpan-group/scannerpan)
+This project, **ScannerPan**, was designed, architected, developed, and optimized with the advanced assistance of Artificial Intelligence.
 
 ---
 
-## 🛠️ Contributi Specifici dell'Intelligenza Artificiale
+## 🧠 AI Agent Platform & Models
 
-L'Intelligenza Artificiale ha partecipato attivamente alla concezione dell'architettura software, alla scrittura del codice sorgente, al refactoring, al debug e al packaging multipiattaforma:
-
-1. **Computer Vision & Elaborazione Immagini (`cv_detector.py`, `merger.py`):**
-   * Rilevamento automatico dei bordi dei documenti e rimozione intelligente dei margini vuoti o neri del piano dello scanner.
-   * Segmentazione automatica multi-soggetto per il ritaglio di scontrini multipli, biglietti da visita o fotografie disposti simultaneamente sul vetro dello scanner.
-   * Algoritmo di raddrizzamento dell'inclinazione (*Deskew*) basato sulla trasformata di Hough probabilistica con stima accurata dell'angolo di rotazione.
-   * Composizione e accorpamento fronte/retro (affiancato o sovrapposto) con bilanciamento DPI.
-
-2. **Interfaccia Grafica e Integrazione Desktop (`ui/`):**
-   * Sviluppo completo dell'interfaccia grafica in **PyQt6** con aderenza rigorosa alle linee guida visive **KDE Plasma (Breeze Light e Breeze Dark)**.
-   * Sistema di rilevamento automatico del tema di sistema su Linux (`kreadconfig6`, `portal`) e su Windows 11 (`winreg` - `AppsUseLightTheme`).
-   * Canvas di visualizzazione reattivo con supporto a zoom fluido, rotazione, ritaglio interattivo e cronologia completa delle modifiche (*Undo/Redo* con `Ctrl+Z` / `Ctrl+Y`).
-   * Procedura guidata interattiva Fronte/Retro (*Duplex Wizard*) e dialogo di scelta dei soggetti multipli con anteprime in miniatura.
-
-3. **Integrazione Hardware Scanner (`hardware/sane_engine.py`):**
-   * Driver e parser per l'interazione con **SANE** (`scanimage`), protocolli di rete **eSCL / AirScan** e scanner USB (con supporto specifico e testato per stampanti multifunzione Brother serie MFC-1910W).
-   * Motore di simulazione (*Mock Scanner*) per test e sviluppo anche in assenza di periferiche fisiche collegate.
-
-4. **Ottimizzazione delle Prestazioni OCR (`ocr_engine.py`, `ocr_exporter.py`):**
-   * Riconfigurazione della pipeline Tesseract per ridurre i tempi di elaborazione da oltre 2 secondi a meno di 0.2 secondi per pagina (~10x più veloce) tramite:
-     * Singola passata unificata per testo e coordinate TSV.
-     * Preprocessing e ridimensionamento a scala di grigi ottimizzata (1800px).
-     * Iniezione dei parametri di accelerazione `--dpi 300` e `-c tessedit_do_invert=0`.
-   * Esportazione multi-formato: Searchable PDF, Microsoft Word (`.docx`), OpenDocument (`.odt`), Rich Text (`.rtf`), Plain Text (`.txt`) e immagini ad alta definizione.
-
-5. **Ingegneria di Packaging & CI/CD:**
-   * Script e specifica per la creazione del pacchetto nativo Debian/Ubuntu [`.deb`](uploads/scannerpan_1.0.0_amd64.deb).
-   * Script e ambiente PyInstaller/Wine per la generazione del binario standalone a 64-bit per Windows 11 [`ScannerPan.exe`](https://gitlab.com/api/v4/projects/88754086/packages/generic/scannerpan/1.0.0/ScannerPan.exe).
-   * Script di automazione per il deploy continuo e la sincronizzazione con il monorepo GitLab `mrpan-group/MrPan-project`.
+* **AI Agent Platform:** **Antigravity** (Google DeepMind - Advanced Agentic Coding)
+* **Core Foundation Model:** **Google Gemini 2.5 Pro**
+* **Operating Environment:** Linux Ubuntu x86_64 / KDE Plasma / Wine Environment
+* **Human Creator & System Architect:** **Marco Panista** (`mr-pan73` / `mrpan-group`)
+* **GitLab Repository:** [https://gitlab.com/mrpan-group/scannerpan](https://gitlab.com/mrpan-group/scannerpan)
 
 ---
 
-## 📅 Cronologia di Sviluppo IA
+## 🛠️ Key Architectural & Technical AI Contributions
 
-| Data | Versione | Interventi IA Principali |
+The AI actively authored the system architecture, algorithms, user interface, hardware abstraction, and deployment packaging:
+
+1. **Computer Vision & Image Processing (`cv_detector.py`, `merger.py`):**
+   * Automatic document border detection and smart cropping to eliminate black/empty scanner margins.
+   * Multi-subject segmentation to independently crop and extract multiple receipts, photos, or business cards placed simultaneously on the flatbed glass.
+   * Deskew angle estimation and rotation correction based on probabilistic Hough line transformation.
+   * Front & back duplex merge wizard (side-by-side or stacked top-to-bottom) with DPI normalization.
+
+2. **Native Graphical User Interface (`ui/`):**
+   * Built from scratch in **PyQt6** following **KDE Plasma (Breeze Light & Dark)** human interface design guidelines.
+   * System theme detection for both Linux (`kreadconfig6`, `freedesktop portal`) and Windows 11 (`winreg` - `AppsUseLightTheme`).
+   * Responsive interactive canvas with smooth pan/zoom, non-destructive cropping, and complete history undo/redo (`Ctrl+Z` / `Ctrl+Y`).
+   * Multi-subject visual picker with thumbnail cards and selective saving.
+
+3. **Hardware Engine & Network Scanning (`hardware/sane_engine.py`):**
+   * SANE CLI wrapper (`scanimage`) and network **eSCL / AirScan** protocol support (tested with Brother MFC-1910W).
+   * Fully functional mock virtual scanner engine for offline and CI/CD testing.
+
+4. **High-Performance OCR Pipeline (`ocr_engine.py`, `ocr_exporter.py`):**
+   * Unified single-pass extraction for words, bounding boxes, and text, reducing per-page OCR latency by ~10x (~0.19s/page).
+   * Smart downscaled grayscale preprocessing (1800px) and performance flag injection (`--dpi 300`, `-c tessedit_do_invert=0`).
+   * Multi-format document export: Searchable PDF, Microsoft Word (`.docx`), OpenDocument (`.odt`), Rich Text (`.rtf`), Plain Text (`.txt`), and high-res image sets.
+
+5. **Cross-Platform Release Engineering & CI/CD:**
+   * Automated Debian/Ubuntu `.deb` package build (`build_deb.sh`).
+   * Single-file standalone Windows 11 executable build (`ScannerPan.exe`) via PyInstaller and Wine with bundled ICU libraries.
+   * Automated local installation script (`install_local.sh`) and continuous GitLab monorepo synchronization.
+
+---
+
+## 📅 Development History with AI
+
+| Date | Release | Key AI Milestones |
 | :--- | :---: | :--- |
-| **Novembre 2026** | **v1.0.0** | Architettura iniziale, interfaccia KDE Breeze, integrazione SANE/AirScan, Computer Vision con OpenCV, packaging Debian `.deb`. |
-| **Novembre 2026** | **v1.0.1** | Supporto nativo Windows 11 (.exe standalone), integrazione Registro Windows per Dark Mode, bundle DLL ICU, spec PyInstaller. |
-| **Novembre 2026** | **v1.0.2** | Ottimizzazione pipeline OCR (10x più veloce a singola passata), gestione trasparente in assenza di Tesseract, script di installazione locale automatica `install_local.sh`. |
+| **Nov 2026** | **v1.0.0** | Initial architecture, KDE Breeze UI, SANE/AirScan hardware driver, OpenCV CV pipeline, Debian `.deb` packaging. |
+| **Nov 2026** | **v1.0.1** | Native Windows 11 standalone executable (`.exe`), Windows registry dark mode detection, ICU DLL bundle, PyInstaller spec. |
+| **Nov 2026** | **v1.0.2** | 10x faster single-pass OCR pipeline, graceful Tesseract absence handling, automated local install script (`install_local.sh`). |
